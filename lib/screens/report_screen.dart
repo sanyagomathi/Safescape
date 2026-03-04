@@ -67,7 +67,7 @@ class ReportScreen extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             _locationCard(),
-            const SizedBox(height: 22),
+            const SizedBox(height: 20),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Text(
@@ -75,7 +75,7 @@ class ReportScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 5),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: GridView.count(

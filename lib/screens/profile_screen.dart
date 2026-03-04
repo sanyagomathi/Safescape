@@ -3,7 +3,7 @@ import '../theme.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-
+  
   Widget _statCard({required String value, required String label, required IconData icon, required Color iconColor}) {
     return Expanded(
       child: Container(

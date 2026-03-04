@@ -3,10 +3,31 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../widgets/gradient_header.dart';
-import '../widgets/bottom_nav.dart';
+import '../api/api_client.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool backendConnected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBackendConnection();
+  }
+
+  Future<void> _checkBackendConnection() async {
+    final connected = await ApiClient.testConnection();
+    setState(() {
+      backendConnected = connected;
+    });
+    print('Backend connected: $backendConnected');
+  }
 
   Widget roundedMap() {
     return Container(
@@ -86,6 +107,41 @@ class HomeScreen extends StatelessWidget {
             const GradientHeader(
               title: "SAFESCAPE",
               subtitle: "Emotional Safety Intelligence",
+            ),
+            const SizedBox(height: 10),
+            // Backend status indicator
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: backendConnected ? Colors.green[50] : Colors.red[50],
+                  border: Border.all(
+                    color: backendConnected ? Colors.green : Colors.red,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      backendConnected
+                          ? Icons.check_circle
+                          : Icons.error_circle,
+                      color: backendConnected ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      backendConnected
+                          ? 'Backend Connected'
+                          : 'Backend Disconnected',
+                      style: TextStyle(
+                        color: backendConnected ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 20),
             roundedMap(),
