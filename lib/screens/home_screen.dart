@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../widgets/gradient_header.dart';
+import '../widgets/ai_assistant.dart';
 import '../api/api_client.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -135,7 +136,23 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
+  floatingActionButton: FloatingActionButton(
+    backgroundColor: Colors.deepPurple,
+    child: const Icon(Icons.smart_toy),
+    onPressed: () {
+      showDialog(
+        context: context,
+        builder: (context) => const Dialog(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: AIAssistant(),
+          ),
+        ),
+      );
+    },
+  ),
+
+  body: SingleChildScrollView(
         child: Column(
           children: [
             const GradientHeader(
@@ -181,6 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
             const SizedBox(height: 40),
           ],
         ),
