@@ -27,25 +27,9 @@ class _NavigateScreenState extends State<NavigateScreen> {
 
   @override
   void initState() {
-    super.initState();
-
-    // 1) Guaranteed visible test polyline
-    routeLines = [
-      Polyline(
-        points: const [
-          LatLng(19.0760, 72.8777),
-          LatLng(19.0820, 72.8850),
-        ],
-        strokeWidth: 12,
-        color: Colors.blue,
-      ),
-    ];
-
-    // 2) Load real routes only after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      loadSafetyRoutes();
-    });
+  super.initState();
   }
+  
 
   Future<List<LatLng>> getRoadRoute(
     double startLat,
@@ -70,6 +54,89 @@ class _NavigateScreenState extends State<NavigateScreen> {
         .toList();
   }
 
+  Future<void> generateSafeColoredRoute(
+      double startLat,
+      double startLng,
+      double endLat,
+      double endLng,
+    ) async {
+
+      // 1️⃣ get the real route geometry
+      final routePoints =
+          await getRoadRoute(startLat, startLng, endLat, endLng);
+
+      if (routePoints.isEmpty) {
+        print("No route returned");
+        return;
+      }
+
+      List<Polyline> lines = [];
+
+      // 2️⃣ sample the route every few points
+      for (int i = 0; i < routePoints.length - 1; i += 8) {
+
+        final p1 = routePoints[i];
+        final p2 = routePoints[i + 1];
+
+        // 3️⃣ ask backend for nearby segments
+        final segments = await ApiClient.getNearbySegments(
+          lat: p1.latitude,
+          lng: p1.longitude,
+          radiusKm: 0.2,
+          limit: 3,
+        );
+
+        double safety = 0.5;
+
+        if (segments.isNotEmpty) {
+          final id = segments.first["id"];
+
+          final score =
+              await ApiClient.getSegmentScore(id.toString(), DateTime.now().hour);
+
+          safety = (score?["overall"] as num?)?.toDouble() ?? 0.5;
+        }
+
+        // 4️⃣ convert safety → color
+        Color color;
+
+        if (safety > 0.7) {
+          color = Colors.green;
+        } else if (safety > 0.4) {
+          color = Colors.orange;
+        } else {
+          color = Colors.red;
+        }
+
+        // 5️⃣ draw small section of route
+        lines.add(
+          Polyline(
+            points: [p1, p2],
+            strokeWidth: 10,
+            color: color,
+          ),
+        );
+      }
+
+      // 6️⃣ render route
+        if (!mounted) return;
+
+        setState(() {
+          routeLines = lines;
+        });
+
+        final bounds = LatLngBounds.fromPoints(routePoints);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          mapController.fitCamera(
+            CameraFit.bounds(
+              bounds: bounds,
+              padding: const EdgeInsets.all(30),
+            ),
+          );
+        });
+    }
   Future<void> loadSafetyRoutes() async {
     if (loadingRoutes) return;
     loadingRoutes = true;
@@ -114,7 +181,10 @@ class _NavigateScreenState extends State<NavigateScreen> {
 
     print("Total polylines: ${lines.length}");
 
-    if (!mounted) return;
+    if (!mounted) {
+        loadingRoutes = false;
+        return;
+      }
 
     setState(() {
       routeLines = lines.isNotEmpty
@@ -142,14 +212,15 @@ class _NavigateScreenState extends State<NavigateScreen> {
       if (allPoints.isNotEmpty) {
         final bounds = LatLngBounds.fromPoints(allPoints);
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: bounds,
-              padding: const EdgeInsets.all(30),
-            ),
-          );
-        });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.all(30),
+          ),
+        );
+      });
       }
     }
 
@@ -178,53 +249,6 @@ class _NavigateScreenState extends State<NavigateScreen> {
 
       return LatLng(lat, lon);
   }
-      Future<void> generateRealRoute() async {
-        final fromText = fromController.text.trim();
-        final toText = toController.text.trim();
-
-        if (fromText.isEmpty || toText.isEmpty) return;
-
-        final fromLatLng = await geocodePlace(fromText);
-        final toLatLng = await geocodePlace(toText);
-
-        if (fromLatLng == null || toLatLng == null) {
-          print("Could not find one or both locations");
-          return;
-        }
-
-        final routePoints = await getRoadRoute(
-          fromLatLng.latitude,
-          fromLatLng.longitude,
-          toLatLng.latitude,
-          toLatLng.longitude,
-        );
-
-        if (routePoints.isEmpty) {
-          print("No route found");
-          return;
-        }
-
-        setState(() {
-          routeLines = [
-            Polyline(
-              points: routePoints,
-              strokeWidth: 12,
-              color: Colors.blue,
-            ),
-          ];
-        });
-
-        final bounds = LatLngBounds.fromPoints(routePoints);
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: bounds,
-              padding: const EdgeInsets.all(30),
-            ),
-          );
-        });
-      }
 
  Widget _locationField({
   required TextEditingController controller,
@@ -255,6 +279,12 @@ class _NavigateScreenState extends State<NavigateScreen> {
       ],
     ),
   );
+}
+@override
+void dispose() {
+  fromController.dispose();
+  toController.dispose();
+  super.dispose();
 }
  
    @override
@@ -295,7 +325,27 @@ class _NavigateScreenState extends State<NavigateScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      onPressed: generateRealRoute,
+                      onPressed:() async {
+                        final fromText = fromController.text.trim();
+                        final toText = toController.text.trim();
+
+                        if (fromText.isEmpty || toText.isEmpty) return;
+
+                        final fromLatLng = await geocodePlace(fromText);
+                        final toLatLng = await geocodePlace(toText);
+
+                        if (fromLatLng == null || toLatLng == null) {
+                          print("Could not find one or both locations");
+                          return;
+                        }
+
+                        await generateSafeColoredRoute(
+                          fromLatLng.latitude,
+                          fromLatLng.longitude,
+                          toLatLng.latitude,
+                          toLatLng.longitude,
+                        );
+                      },
                       child: const Text(
                         "Find Safe Routes",
                         style: TextStyle(
