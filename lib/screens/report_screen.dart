@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../widgets/gradient_header.dart';
 import '../widgets/report_tile.dart';
-import '../api/api_client.dart';
+import 'change_location_screen.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -12,103 +12,62 @@ class ReportScreen extends StatefulWidget {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
+
   bool submitting = false;
   String status = "";
 
-  // For now we use the same demo location as your map.
-  // Later we will use real GPS.
-  static const double demoLat = 28.6139;
-  static const double demoLng = 77.2090;
+  String location = "MG Road, Near Central Metro Station";
 
-  Future<String?> _getAnyNearbySegmentId() async {
-    final segs = await ApiClient.getNearbySegments(
-      lat: demoLat,
-      lng: demoLng,
-      radiusKm: 2.0,
-      limit: 1,
-    );
-    if (segs.isEmpty) return null;
-    return segs.first["id"].toString();
-  }
-
-  Future<void> _submit(String category) async {
-    if (submitting) return;
+  Future<void> submitReport(String type) async {
 
     setState(() {
       submitting = true;
-      status = "Submitting...";
+      status = "Submitting report...";
     });
 
-    try {
-      final segmentId = await _getAnyNearbySegmentId();
+    await Future.delayed(const Duration(seconds: 2));
 
-      if (segmentId == null) {
-        setState(() {
-          submitting = false;
-          status = "No segments found. Seed segments first.";
-        });
-        return;
-      }
+    setState(() {
+      submitting = false;
+      status = "$type report submitted successfully";
+    });
 
-      final hour = DateTime.now().hour;
+  }
 
-      final ok = await ApiClient.submitReview(
-        segmentId: segmentId,
-        category: category,
-        gender: "woman",
-        hour: hour,
-        rating: 0.2,
-        note: "Report from app",
-      );
+  Future<void> openChangeLocation() async {
 
-      if (!ok) {
-        setState(() {
-          submitting = false;
-          status = "Submit failed ❌";
-        });
-        return;
-      }
+    final newLocation = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChangeLocationScreen(
+          currentLocation: location,
+        ),
+      ),
+    );
 
-      // NEW: fetch score
-      final score = await ApiClient.getSegmentScore(segmentId, hour);
-
-      print("DEBUG segmentId=$segmentId hour=$hour");
-      print("DEBUG score response: $score");
-
-      final overall = score?["overall"]?.toString() ?? "???";
-
+    if (newLocation != null) {
       setState(() {
-        submitting = false;
-        status = "Submitted ✅ Score now: $overall";
-      });
-    } catch (e) {
-      print("Submit error: $e");
-      setState(() {
-        submitting = false;
-        status = "Error submitting ❌";
+        location = newLocation;
       });
     }
   }
-  Widget _locationCard() {
+
+  Widget locationCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-          ),
-        ],
       ),
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
-              Icon(Icons.location_on_outlined, color: Colors.black54),
+
+          const Row(
+            children: [
+              Icon(Icons.location_on_outlined),
               SizedBox(width: 8),
               Text(
                 "Current Location",
@@ -116,107 +75,134 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          const Text(
-            "MG Road, Near Central Metro Station",
-            style: TextStyle(fontSize: 16),
-          ),
+
+          const SizedBox(height: 12),
+
+          Text(location, style: const TextStyle(fontSize: 16)),
+
           const SizedBox(height: 16),
+
           Center(
-            child: Text(
-              "Change Location",
-              style: TextStyle(
-                color: AppTheme.primaryBlue,
-                fontWeight: FontWeight.w700,
+            child: GestureDetector(
+              onTap: openChangeLocation,
+              child: Text(
+                "Change Location",
+                style: TextStyle(
+                  color: AppTheme.primaryBlue,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
+          )
         ],
+      ),
+    );
+  }
+
+  Widget reportGrid() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+
+      child: GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
+
+        children: [
+
+          ReportTile(
+            icon: Icons.lightbulb_outline,
+            iconColor: Colors.orange,
+            label: "Poor Lighting",
+            onTap: () => submitReport("Poor Lighting"),
+          ),
+
+          ReportTile(
+            icon: Icons.report_gmailerrorred,
+            iconColor: Colors.red,
+            label: "Harassment",
+            onTap: () => submitReport("Harassment"),
+          ),
+
+          ReportTile(
+            icon: Icons.place_outlined,
+            iconColor: Colors.deepOrange,
+            label: "Isolated Area",
+            onTap: () => submitReport("Isolated Area"),
+          ),
+
+          ReportTile(
+            icon: Icons.people_outline,
+            iconColor: Colors.blue,
+            label: "Crowded / Safe",
+            onTap: () => submitReport("Crowded Area"),
+          ),
+
+        ],
+      ),
+    );
+  }
+
+  Widget statusRow() {
+    if (status.isEmpty) return const SizedBox();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Text(
+        status,
+        style: const TextStyle(fontWeight: FontWeight.bold),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       backgroundColor: AppTheme.lightGrey,
+
       body: SingleChildScrollView(
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+
           children: [
+
             const GradientHeader(
               title: "Report Safety Concerns",
               subtitle: "Help build a safer community",
             ),
+
             const SizedBox(height: 18),
-            _locationCard(),
+
+            locationCard(),
+
             const SizedBox(height: 20),
+
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Text(
                 "What would you like to report?",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 5),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-                childAspectRatio: 1.15,
-                children: [
-                  ReportTile(
-                    icon: Icons.lightbulb_outline,
-                    iconColor: Colors.orange,
-                    label: "Poor Lighting",
-                    onTap: submitting ? null : () => _submit("poor_lighting"),
-                  ),
-                  ReportTile(
-                    icon: Icons.report_gmailerrorred,
-                    iconColor: Colors.red,
-                    label: "Harassment",
-                    onTap: submitting ? null : () => _submit("harassment"),
-                  ),
-                  ReportTile(
-                    icon: Icons.place_outlined,
-                    iconColor: Colors.deepOrange,
-                    label: "Isolated Area",
-                    onTap: submitting ? null : () => _submit("isolated_area"),
-                  ),
-                  ReportTile(
-                    icon: Icons.people_outline,
-                    iconColor: Colors.blue,
-                    label: "Crowded/Safe",
-                    onTap: submitting ? null : () => _submit("crowded_safe"),
-                  ),
-                ],
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // Status row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  if (submitting) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                  if (submitting) const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      status,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            reportGrid(),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
+
+            statusRow(),
+
+            const SizedBox(height: 30),
+
           ],
         ),
       ),

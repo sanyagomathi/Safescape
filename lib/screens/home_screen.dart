@@ -1,134 +1,45 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../widgets/gradient_header.dart';
-import '../widgets/ai_assistant.dart';
-import '../api/api_client.dart';
-
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  bool backendConnected = false;
-  int segmentsCount = 0;
-  int safePointsCount = 0;
-  String testStatus = "";
-
-  @override
-
-
-  Future<void> _runApiTest() async {
-  setState(() {
-    testStatus = "Testing API...";
-  });
-
-  // Same demo coords you use in your map (New Delhi)
-  const double lat = 28.6139;
-  const double lng = 77.2090;
-
-  final segs = await ApiClient.getNearbySegments(
-    lat: lat,
-    lng: lng,
-    radiusKm: 2.0,
-    limit: 50,
-  );
-
-  final points = await ApiClient.getNearbySafePoints(
-    lat: lat,
-    lng: lng,
-    radiusKm: 2.0,
-    limit: 50,
-  );
-
-  setState(() {
-    segmentsCount = segs.length;
-    safePointsCount = points.length;
-    testStatus = "OK ✅ Segments=$segmentsCount | SafePoints=$safePointsCount";
-  });
-
-  if (segs.isNotEmpty) {
-    print("First segment JSON: ${segs.first}");
-  } else {
-    print("No segments returned (seed segments first).");
+  void callNumber(String number) async {
+    final Uri url = Uri.parse("tel:$number");
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
   }
 
-  if (points.isNotEmpty) {
-    print("First safe point JSON: ${points.first}");
-  } else {
-    print("No safe points returned (insert/seed safe_points).");
-  }
-}
-
-  Widget roundedMap() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      height: 250,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-          )
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: FlutterMap(
-        options: const MapOptions(
-          initialCenter: LatLng(28.6139, 77.2090), // New Delhi demo
-          initialZoom: 13,
+  Widget sosButton(String title, IconData icon, Color color, String number) {
+    return Builder(
+      builder: (context) => GestureDetector(
+        onTap: () => callNumber(number),
+        child: Container(
+          width: 110,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.shade300,
+                blurRadius: 8,
+              )
+            ],
+          ),
+          child: Column(
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withOpacity(0.2),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(height: 10),
+              Text(title,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
-        children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.safescape',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget infoCard({
-    required String title,
-    required String value,
-    required String subtitle,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: iconColor),
-          const SizedBox(height: 15),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(title),
-          const SizedBox(height: 5),
-          Text(subtitle, style: const TextStyle(color: Colors.grey)),
-        ],
       ),
     );
   }
@@ -136,70 +47,126 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-  floatingActionButton: FloatingActionButton(
-    backgroundColor: Colors.deepPurple,
-    child: const Icon(Icons.smart_toy),
-    onPressed: () {
-      showDialog(
-        context: context,
-        builder: (context) => const Dialog(
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: AIAssistant(),
-          ),
-        ),
-      );
-    },
-  ),
+      backgroundColor: const Color(0xfff4f6f8),
 
-  body: SingleChildScrollView(
+      appBar: AppBar(
+        title: const Text("SafeEscape"),
+        backgroundColor: Colors.red,
+        centerTitle: true,
+      ),
+
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const GradientHeader(
-              title: "SAFESCAPE",
-              subtitle: "Emotional Safety Intelligence",
-            ),
-            const SizedBox(height: 10),
-          
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                testStatus,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
+
+            /// SAFE AREA STATUS
+            const Text(
+              "Safe Area Status",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
 
-            const SizedBox(height: 12),
-            roundedMap(),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
+            const SizedBox(height: 15),
+
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xff11998e),
+                    Color(0xff38ef7d)
+                  ],
+                ),
+              ),
+              child: const Row(
                 children: [
+                  Icon(Icons.shield, color: Colors.white, size: 35),
+                  SizedBox(width: 12),
                   Expanded(
-                    child: infoCard(
-                      title: "Safe Areas",
-                      value: safePointsCount.toString(),
-                      subtitle: "from backend",
-                      icon: Icons.trending_up,
-                      iconColor: Colors.green,
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: infoCard(
-                      title: "Alerts",
-                      value: "3",
-                      subtitle: "nearby cautions",
-                      icon: Icons.warning,
-                      iconColor: Colors.orange,
+                    child: Text(
+                      "You are currently in a Safe Zone",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 30),
+
+            /// ALERTS
+            const Text(
+              "Nearby Alerts",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 15),
+
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.shade300,
+                    blurRadius: 8,
+                  )
+                ],
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      color: Colors.red, size: 30),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Suspicious activity reported 1 km away",
+                      style: TextStyle(fontSize: 15),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 35),
+
+            /// SOS CONTACTS
+            const Text(
+              "Emergency SOS",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+
             const SizedBox(height: 20),
-            const SizedBox(height: 40),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                sosButton(
+                  "Police",
+                  Icons.local_police,
+                  Colors.blue,
+                  "100",
+                ),
+                sosButton(
+                  "Ambulance",
+                  Icons.medical_services,
+                  Colors.red,
+                  "102",
+                ),
+                sosButton(
+                  "Hospital",
+                  Icons.local_hospital,
+                  Colors.green,
+                  "108",
+                ),
+              ],
+            ),
           ],
         ),
       ),
