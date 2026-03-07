@@ -17,7 +17,36 @@ class ApiClient {
       return false;
     }
   }
+    /// Get AI home insights for an area
+    static Future<Map<String, dynamic>?> getHomeInsights({
+      required double lat,
+      required double lng,
+      double radiusKm = 1.5,
+      int? hour,
+    }) async {
+      try {
+        final response = await http
+            .post(
+              Uri.parse("$baseUrl/ai/home-insights"),
+              headers: {"Content-Type": "application/json"},
+              body: jsonEncode({
+                "lat": lat,
+                "lng": lng,
+                "radius_km": radiusKm,
+                "hour": hour,
+              }),
+            )
+            .timeout(const Duration(seconds: 10));
 
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+        return null;
+      } catch (e) {
+        print('Error fetching home insights: $e');
+        return null;
+      }
+    }
   /// Get nearby safe points (police, medical, transit, commercial)
   static Future<List<dynamic>> getNearbySafePoints({
     required double lat,

@@ -60,6 +60,9 @@ void updateSuggestions(String value, bool isFrom) {
 
   List<Polyline> routeLines = [];
 
+  LatLng? startPoint;
+  LatLng? endPoint;
+
   @override
   void initState() {
   super.initState();
@@ -96,89 +99,93 @@ void updateSuggestions(String value, bool isFrom) {
   }
 
   Future<void> generateSafeColoredRoute(
-      double startLat,
-      double startLng,
-      double endLat,
-      double endLng,
-    ) async {
+    double startLat,
+    double startLng,
+    double endLat,
+    double endLng,
+  ) async {
+    final routePoints = await getRoadRoute(startLat, startLng, endLat, endLng);
 
-      // 1️⃣ get the real route geometry
-      final routePoints =
-          await getRoadRoute(startLat, startLng, endLat, endLng);
+    if (routePoints.isEmpty) {
+      print("No route returned");
+      return;
+    }
 
-      if (routePoints.isEmpty) {
-        print("No route returned");
-        return;
-      }
+    List<Polyline> lines = [];
 
-      List<Polyline> lines = [];
+    // 1. Base full route in green
+    lines.add(
+      Polyline(
+        points: routePoints,
+        strokeWidth: 8,
+        color: Colors.green,
+      ),
+    );
 
-      // 2️⃣ sample the route every few points
-      for (int i = 0; i < routePoints.length - 1; i += 8) {
+    // 2. Overlay only caution/riskier sections
+    for (int i = 0; i < routePoints.length - 1; i += 8) {
+      final p1 = routePoints[i];
+      final p2 = routePoints[i + 1];
 
-        final p1 = routePoints[i];
-        final p2 = routePoints[i + 1];
+      final segments = await ApiClient.getNearbySegments(
+        lat: p1.latitude,
+        lng: p1.longitude,
+        radiusKm: 0.2,
+        limit: 3,
+      );
 
-        // 3️⃣ ask backend for nearby segments
-        final segments = await ApiClient.getNearbySegments(
-          lat: p1.latitude,
-          lng: p1.longitude,
-          radiusKm: 0.2,
-          limit: 3,
+      double safety = 0.8; // assume safe unless backend says otherwise
+
+      if (segments.isNotEmpty) {
+        final id = segments.first["id"];
+
+        final score = await ApiClient.getSegmentScore(
+          id.toString(),
+          DateTime.now().hour,
         );
 
-        double safety = 0.5;
+        safety = (score?["overall"] as num?)?.toDouble() ?? 0.8;
+      }
 
-        if (segments.isNotEmpty) {
-          final id = segments.first["id"];
-
-          final score =
-              await ApiClient.getSegmentScore(id.toString(), DateTime.now().hour);
-
-          safety = (score?["overall"] as num?)?.toDouble() ?? 0.5;
-        }
-
-        // 4️⃣ convert safety → color
-        Color color;
-
-        if (safety > 0.7) {
-          color = Colors.green;
-        } else if (safety > 0.4) {
-          color = Colors.orange;
-        } else {
-          color = Colors.red;
-        }
-
-        // 5️⃣ draw small section of route
+      // 3. Only draw overlays for caution or risk
+      if (safety <= 0.7 && safety > 0.4) {
         lines.add(
           Polyline(
             points: [p1, p2],
             strokeWidth: 10,
-            color: color,
+            color: Colors.orange,
+          ),
+        );
+      } else if (safety <= 0.4) {
+        lines.add(
+          Polyline(
+            points: [p1, p2],
+            strokeWidth: 10,
+            color: Colors.red,
           ),
         );
       }
-
-      // 6️⃣ render route
-        if (!mounted) return;
-
-        setState(() {
-          routeLines = lines;
-        });
-
-        final bounds = LatLngBounds.fromPoints(routePoints);
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: bounds,
-              padding: const EdgeInsets.all(30),
-            ),
-          );
-        });
     }
- 
+
+    if (!mounted) return;
+
+    setState(() {
+      routeLines = lines;
+    });
+
+    final bounds = LatLngBounds.fromPoints(routePoints);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(30),
+        ),
+      );
+    });
+  }
+
   Future<LatLng?> geocodePlace(String query) async {
     final url =
         "https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=1";
@@ -380,8 +387,86 @@ Widget build(BuildContext context) {
               PolylineLayer(
                 polylines: routeLines,
               ),
+              MarkerLayer(
+                markers: [
+                  if (startPoint != null)
+                    Marker(
+                      point: startPoint!,
+                      width: 50,
+                      height: 50,
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.20),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.trip_origin,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            "Start",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (endPoint != null)
+                    Marker(
+                      point: endPoint!,
+                      width: 50,
+                      height: 50,
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.20),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.location_on,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            "End",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ],
-          ),
+            ),
         ),
 
         const Positioned(
@@ -393,6 +478,26 @@ Widget build(BuildContext context) {
             subtitle: "Find the safest route to your destination",
           ),
         ),
+
+         if (routeLines.isNotEmpty)
+          Positioned(
+            top: 120,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.10),
+                    blurRadius: 12,
+                  ),
+                ],
+              ),
+              ),
+          ),
+
 
         DraggableScrollableSheet(
           initialChildSize: 0.28,
@@ -518,6 +623,11 @@ Widget build(BuildContext context) {
                               return;
                             }
 
+                            setState(() {
+                                startPoint = fromLatLng;
+                                endPoint = toLatLng;
+                              });
+
                             await generateSafeColoredRoute(
                               fromLatLng.latitude,
                               fromLatLng.longitude,
@@ -544,4 +654,36 @@ Widget build(BuildContext context) {
     ),
   );
 }
+}
+
+class _LegendRow extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendRow({
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12),
+        ),
+      ],
+    );
+  }
 }
