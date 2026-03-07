@@ -9,36 +9,55 @@ class AIAssistant extends StatefulWidget {
 }
 
 class _AIAssistantState extends State<AIAssistant> {
-
   final TextEditingController controller = TextEditingController();
 
   String response = "";
   bool loading = false;
 
-  void askAI() async {
+  static const double demoLat = 28.6139;
+  static const double demoLng = 77.2090;
 
-    if (controller.text.isEmpty) return;
+  Future<void> askAI() async {
+    if (controller.text.trim().isEmpty) return;
 
     setState(() {
       loading = true;
       response = "";
     });
 
-    final reply = await AIService.askAI(controller.text);
+    try {
+      final reply = await AIService.askAI(
+        message: controller.text.trim(),
+        lat: demoLat,
+        lng: demoLng,
+        hour: DateTime.now().hour,
+      );
 
-    setState(() {
-      response = reply;
-      loading = false;
-    });
+      setState(() {
+        response = reply;
+      });
+    } catch (e) {
+      setState(() {
+        response = "Could not get AI response right now.";
+      });
+    } finally {
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(16),
-
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -49,11 +68,10 @@ class _AIAssistantState extends State<AIAssistant> {
           )
         ],
       ),
-
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           const Row(
             children: [
               Icon(Icons.smart_toy, color: Colors.purple),
@@ -62,14 +80,12 @@ class _AIAssistantState extends State<AIAssistant> {
                 "AI Safety Assistant",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 16
+                  fontSize: 16,
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
           TextField(
             controller: controller,
             decoration: InputDecoration(
@@ -79,21 +95,14 @@ class _AIAssistantState extends State<AIAssistant> {
               ),
             ),
           ),
-
           const SizedBox(height: 10),
-
           ElevatedButton(
             onPressed: askAI,
             child: const Text("Ask AI"),
           ),
-
           const SizedBox(height: 10),
-
-          if (loading)
-            const CircularProgressIndicator(),
-
-          if (response.isNotEmpty)
-            Text(response),
+          if (loading) const CircularProgressIndicator(),
+          if (response.isNotEmpty) Text(response),
         ],
       ),
     );

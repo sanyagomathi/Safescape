@@ -17,6 +17,10 @@ class SafescapeApp extends StatelessWidget {
       title: "Safescape",
       theme: AppTheme.theme,
       home: const AuthWrapper(),
+            routes: {
+        '/chat': (_) =>  ChatScreen(),
+        '/agent-ai': (_) =>  AgentAIScreen(),
+      },
     );
   }
 }
