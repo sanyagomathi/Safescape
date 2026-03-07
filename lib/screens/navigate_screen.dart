@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -17,13 +18,47 @@ class NavigateScreen extends StatefulWidget {
 }
 
 class _NavigateScreenState extends State<NavigateScreen> {
+  String selectedMode = "Walk";
+  bool isSearching = false;
+  
+
+  void swapLocations() {
+  final temp = fromController.text;
+  fromController.text = toController.text;
+  toController.text = temp;
+  setState(() {});
+}
+void updateSuggestions(String value, bool isFrom) {
+  final q = value.trim().toLowerCase();
+
+  final matches = recentPlaces
+      .where((p) => p.toLowerCase().contains(q))
+      .toList();
+
+  setState(() {
+    if (isFrom) {
+      fromSuggestions = q.isEmpty ? [] : matches;
+    } else {
+      toSuggestions = q.isEmpty ? [] : matches;
+    }
+  });
+}
+  final List<String> recentPlaces = [
+    "Bandra Station, Mumbai",
+    "Juhu Beach, Mumbai",
+    "Dadar Station, Mumbai",
+    "Gateway of India, Mumbai",
+    "Andheri West, Mumbai",
+  ];
+
+  List<String> fromSuggestions = [];
+  List<String> toSuggestions = [];
+
   final MapController mapController = MapController();
   final TextEditingController fromController = TextEditingController();
   final TextEditingController toController = TextEditingController();
 
   List<Polyline> routeLines = [];
-  bool loadingRoutes = false;
-  bool fittedOnce = false;
 
   @override
   void initState() {
@@ -37,9 +72,15 @@ class _NavigateScreenState extends State<NavigateScreen> {
     double endLat,
     double endLng,
   ) async {
-    final url =
-        "https://router.project-osrm.org/route/v1/foot/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson";
+ final profile = selectedMode == "Drive"
+    ? "driving"
+    : selectedMode == "Bike"
+        ? "bike"
+        : "foot";
 
+      final url =
+          "https://router.project-osrm.org/route/v1/$profile/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson";
+          
     final response = await http.get(Uri.parse(url));
 
     if (response.statusCode != 200) {
@@ -137,97 +178,7 @@ class _NavigateScreenState extends State<NavigateScreen> {
           );
         });
     }
-  Future<void> loadSafetyRoutes() async {
-    if (loadingRoutes) return;
-    loadingRoutes = true;
-
-    const lat = 19.0760;
-    const lng = 72.8777;
-
-    final segments = await ApiClient.getNearbySegments(
-      lat: lat,
-      lng: lng,
-      radiusKm: 1.5,
-      limit: 20,
-    );
-
-    print("Segments received: ${segments.length}");
-
-    final List<Polyline> lines = [];
-
-    for (final seg in segments) {
-      final segLat = (seg["lat"] as num).toDouble();
-      final segLng = (seg["lng"] as num).toDouble();
-
-      final routePoints = await getRoadRoute(
-        segLat,
-        segLng,
-        segLat + 0.002,
-        segLng + 0.002,
-      );
-
-      print("Route points: ${routePoints.length}");
-
-      if (routePoints.isEmpty) continue;
-
-      lines.add(
-        Polyline(
-          points: routePoints,
-          strokeWidth: 10,
-          color: Colors.red,
-        ),
-      );
-    }
-
-    print("Total polylines: ${lines.length}");
-
-    if (!mounted) {
-        loadingRoutes = false;
-        return;
-      }
-
-    setState(() {
-      routeLines = lines.isNotEmpty
-          ? lines
-          : [
-              Polyline(
-                points: const [
-                  LatLng(19.0760, 72.8777),
-                  LatLng(19.0820, 72.8850),
-                ],
-                strokeWidth: 12,
-                color: Colors.blue,
-              ),
-            ];
-    });
-
-    if (!fittedOnce && routeLines.isNotEmpty) {
-      fittedOnce = true;
-
-      final allPoints = <LatLng>[];
-      for (final line in routeLines) {
-        allPoints.addAll(line.points);
-      }
-
-      if (allPoints.isNotEmpty) {
-        final bounds = LatLngBounds.fromPoints(allPoints);
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        mapController.fitCamera(
-          CameraFit.bounds(
-            bounds: bounds,
-            padding: const EdgeInsets.all(30),
-          ),
-        );
-      });
-      }
-    }
-
-    loadingRoutes = false;
-  }
-
-
+ 
   Future<LatLng?> geocodePlace(String query) async {
     final url =
         "https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=1";
@@ -250,33 +201,154 @@ class _NavigateScreenState extends State<NavigateScreen> {
       return LatLng(lat, lon);
   }
 
- Widget _locationField({
+
+Widget _locationField({
   required TextEditingController controller,
   required IconData icon,
   required String hint,
+  required bool isFrom,
 }) {
+  final suggestions = isFrom ? fromSuggestions : toSuggestions;
+
+  return Column(
+    children: [
+      Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+            ),
+          ],
+          border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.black54),
+            const SizedBox(width: 6),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                onChanged: (value) => updateSuggestions(value, isFrom),
+                decoration: InputDecoration(
+                  hintText: hint,
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (suggestions.isNotEmpty)
+        Container(
+          margin: const EdgeInsets.only(top: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: Column(
+            children: suggestions.map((place) {
+              return ListTile(
+                dense: true,
+                leading: const Icon(Icons.history, size: 18),
+                title: Text(place),
+                onTap: () {
+                  controller.text = place;
+                  setState(() {
+                    if (isFrom) {
+                      fromSuggestions = [];
+                    } else {
+                      toSuggestions = [];
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+        ),
+    ],
+  );
+}
+Widget _modeButton({
+  required String label,
+  required IconData icon,
+}) {
+  final isActive = selectedMode == label;
+
+  return Expanded(
+    child: GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedMode = label;
+        });
+      },
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: isActive ? AppTheme.primaryBlue : AppTheme.lightGrey,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isActive
+                ? AppTheme.primaryBlue
+                : Colors.black.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? Colors.white : Colors.black54,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+Widget _modeDropdown() {
   return Container(
-    height: 56,
     padding: const EdgeInsets.symmetric(horizontal: 14),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
     ),
-    child: Row(
-      children: [
-        Icon(icon, color: Colors.black54),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: hint,
-              border: InputBorder.none,
-            ),
-          ),
-        ),
-      ],
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: selectedMode,
+        isExpanded: true,
+        items: const [
+          DropdownMenuItem(value: "Walk", child: Text("Walk")),
+          DropdownMenuItem(value: "Drive", child: Text("Drive")),
+          DropdownMenuItem(value: "Bike", child: Text("Bike")),
+        ],
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() {
+            selectedMode = value;
+          });
+        },
+      ),
     ),
   );
 }
@@ -287,111 +359,189 @@ void dispose() {
   super.dispose();
 }
  
-   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.lightGrey,
-      body: Column(
-        children: [
-          const GradientHeader(
+ @override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: AppTheme.lightGrey,
+    body: Stack(
+      children: [
+        Positioned.fill(
+          child: FlutterMap(
+            mapController: mapController,
+            options: const MapOptions(
+              initialCenter: LatLng(19.0760, 72.8777),
+              initialZoom: 14,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                userAgentPackageName: "com.example.safescape",
+              ),
+              PolylineLayer(
+                polylines: routeLines,
+              ),
+            ],
+          ),
+        ),
+
+        const Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: GradientHeader(
             title: "Safe Navigation",
             subtitle: "Find the safest route to your destination",
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-              child: Column(
-                children: [
-                  _locationField(
-                  controller: fromController,
-                  icon: Icons.location_on_outlined,
-                  hint: "Your location",
+        ),
+
+        DraggableScrollableSheet(
+          initialChildSize: 0.28,
+          minChildSize: 0.14,
+          maxChildSize: 0.65,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
                 ),
-                const SizedBox(height: 14),
-                _locationField(
-                  controller: toController,
-                  icon: Icons.send_outlined,
-                  hint: "Where to?",
-                ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      onPressed:() async {
-                        final fromText = fromController.text.trim();
-                        final toText = toController.text.trim();
-
-                        if (fromText.isEmpty || toText.isEmpty) return;
-
-                        final fromLatLng = await geocodePlace(fromText);
-                        final toLatLng = await geocodePlace(toText);
-
-                        if (fromLatLng == null || toLatLng == null) {
-                          print("Could not find one or both locations");
-                          return;
-                        }
-
-                        await generateSafeColoredRoute(
-                          fromLatLng.latitude,
-                          fromLatLng.longitude,
-                          toLatLng.latitude,
-                          toLatLng.longitude,
-                        );
-                      },
-                      child: const Text(
-                        "Find Safe Routes",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.black.withValues(alpha: 0.04),
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: FlutterMap(
-                          mapController: mapController,
-                          options: const MapOptions(
-                            initialCenter: LatLng(19.0760, 72.8777),
-                            initialZoom: 14,
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate:
-                                  "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                              userAgentPackageName: "com.example.safescape",
-                            ),
-                            PolylineLayer(
-                              polylines: routeLines,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.10),
+                    blurRadius: 20,
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 5,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  _locationField(
+                                    controller: fromController,
+                                    icon: Icons.location_on_outlined,
+                                    hint: "Your location",
+                                    isFrom: true,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _locationField(
+                                    controller: toController,
+                                    icon: Icons.send_outlined,
+                                    hint: "Where to?",
+                                    isFrom: false,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 30),
+                              child: GestureDetector(
+                                onTap: swapLocations,
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.lightGrey,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                    ),
+                                  ),
+                                  child: const Icon(Icons.swap_vert),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          _modeButton(
+                            label: "Walk",
+                            icon: Icons.directions_walk,
+                          ),
+                          const SizedBox(width: 8),
+                          _modeButton(
+                            label: "Car",
+                            icon: Icons.directions_car,
+                          ),
+                          const SizedBox(width: 8),
+                          _modeButton(
+                            label: "Cycle",
+                            icon: Icons.directions_bike,
+                          ),
+                        ],
+                      ),
+        const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryBlue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: () async {
+                            final fromText = fromController.text.trim();
+                            final toText = toController.text.trim();
+
+                            if (fromText.isEmpty || toText.isEmpty) return;
+
+                            final fromLatLng = await geocodePlace(fromText);
+                            final toLatLng = await geocodePlace(toText);
+
+                            if (fromLatLng == null || toLatLng == null) {
+                              print("Location not found");
+                              return;
+                            }
+
+                            await generateSafeColoredRoute(
+                              fromLatLng.latitude,
+                              fromLatLng.longitude,
+                              toLatLng.latitude,
+                              toLatLng.longitude,
+                            );
+                          },
+                          child: const Text(
+                            "Find Safe Route",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
 }

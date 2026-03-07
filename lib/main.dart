@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'screens/app_shell.dart';
 import 'screens/login_page_screen.dart';
+import 'screens/chat_screen.dart';
+import 'screens/agentic_ai_screen.dart';
 
 void main() {
   runApp(const SafescapeApp());
@@ -17,6 +19,10 @@ class SafescapeApp extends StatelessWidget {
       title: "Safescape",
       theme: AppTheme.theme,
       home: const AuthWrapper(),
+            routes: {
+        '/chat': (_) =>  ChatScreen(),
+        '/agent-ai': (_) =>  AgentAIScreen(),
+      },
     );
   }
 }
